@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --lime: #c6f135;
+  --lime-dim: #9bbf1f;
+  --red: #ff5c5c;
+  --surface-0: #0a0a0a;
+  --surface-1: #111111;
+  --surface-2: #161616;
+  --surface-3: #1e1e1e;
+  --surface-4: #2a2a2a;
+  --text-primary: #e8e8e8;
+  --text-secondary: #888888;
+  --text-muted: #444444;
+}
+
+* { -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  overscroll-behavior: none;
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Scrollbars hidden */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }
+
+/* Smooth tap feedback */
+button:active { transform: scale(0.96); transition: transform 0.08s; }
+
+/* Input resets */
+input, select, textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--surface-4);
+  color: var(--text-primary);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  width: 100%;
+  outline: none;
+}
+input:focus, select:focus { border-color: var(--lime); }
+select option { background: var(--surface-2); }
+
+/* Lime glow on active elements */
+.lime-glow { box-shadow: 0 0 0 1px var(--lime), 0 0 12px rgba(198,241,53,0.15); }
+
+/* Slide up animation */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.slide-up { animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+.fade-in { animation: fadeIn 0.2s ease forwards; }
+
+/* Status dot pulse */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.pulse { animation: pulse 2s ease-in-out infinite; }

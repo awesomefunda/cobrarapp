@@ -1,0 +1,6 @@
+# robots.txt — cobrarapp.com
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://cobrarapp.com/sitemap.xml
