@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Settings, LayoutGrid, History, Shield } from 'lucide-react'
-import { db, getSetting, setSetting, addClient, deleteClient, FREE_CLIENT_LIMIT } from './db'
+import { Plus, Settings, LayoutGrid, History, Shield, X, Trash2, Pencil, Archive, ChevronDown, ChevronUp } from 'lucide-react'
+import { db, getSetting, setSetting, addClient, deleteClient, deleteHistoryEntry, archivePaidClients } from './db'
 import { translations } from './i18n'
 import Onboarding from './components/Onboarding'
 import ClientRow from './components/ClientRow'
@@ -16,13 +16,15 @@ export default function App() {
   const [onboarded, setOnboarded] = useState(false)
   const [role, setRole] = useState('other')
   const [lang, setLang] = useState('en')
-  const [isPro, setIsPro] = useState(false)
   const [tab, setTab] = useState('dashboard')
   const [mode, setMode] = useState('receivable') // 'receivable' | 'payable'
   const [showForm, setShowForm] = useState(false)
   const [editClient, setEditClientState] = useState(null)
   const [showLegal, setShowLegal] = useState(false)
   const [showBackup, setShowBackup] = useState(false)
+  const [historyModal, setHistoryModal] = useState(null)   // selected history entry
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
   const t = translations[lang]
 
@@ -32,8 +34,7 @@ export default function App() {
       const ob = await getSetting('onboarded', false)
       const r = await getSetting('role', 'other')
       const l = await getSetting('lang', 'en')
-      const pro = await getSetting('isPro', false)
-      setOnboarded(ob); setRole(r); setLang(l); setIsPro(pro)
+      setOnboarded(ob); setRole(r); setLang(l)
 
       // Check if backup banner needed (1st of month, not dismissed this month)
       const now = new Date()
@@ -63,12 +64,20 @@ export default function App() {
   const allHistory = useLiveQuery(() => db.history.orderBy('timestamp').reverse().limit(50).toArray(), []) || []
 
   const visibleClients = useMemo(() => {
-    const filtered = allClients.filter(c => c.type === mode)
+    const filtered = allClients.filter(c => c.type === mode && !c.archived)
     return [...filtered].sort((a, b) => {
       if (a.isPaid !== b.isPaid) return a.isPaid ? 1 : -1
       return new Date(a.nextDueDate) - new Date(b.nextDueDate)
     })
   }, [allClients, mode])
+
+  const archivedClients = useMemo(() =>
+    allClients.filter(c => c.archived),
+  [allClients])
+
+  const paidCount = useMemo(() =>
+    visibleClients.filter(c => c.isPaid).length,
+  [visibleClients])
 
   const overdueCount = useMemo(() =>
     allClients.filter(c => !c.isPaid && new Date(c.nextDueDate) < new Date()).length,
@@ -113,10 +122,8 @@ export default function App() {
             <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-display font-medium"
               style={{ background: 'var(--lime)', color: '#111' }}>Co</div>
             <span className="text-lg font-body font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>Cobrar</span>
-            {isPro && (
-              <span className="text-[9px] font-display font-medium px-1.5 py-0.5 rounded-md uppercase tracking-widest"
-                style={{ background: 'rgba(198,241,53,0.15)', color: 'var(--lime)' }}>PRO</span>
-            )}
+            <span className="text-[9px] font-display font-medium px-1.5 py-0.5 rounded-md uppercase tracking-widest"
+              style={{ background: 'rgba(198,241,53,0.1)', color: 'var(--lime)' }}>Free</span>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={toggleLang}
@@ -168,6 +175,18 @@ export default function App() {
               ))}
             </div>
 
+            {/* Archive paid button — only visible when paid entries exist */}
+            {paidCount > 0 && (
+              <button
+                onClick={() => setShowArchiveConfirm(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl mb-3 text-xs font-body font-medium"
+                style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px dashed var(--surface-4)' }}
+              >
+                <Archive size={13} />
+                {t.archivePaidBtn(paidCount)}
+              </button>
+            )}
+
             {/* Client list */}
             <div className="space-y-2">
               {visibleClients.length === 0 ? (
@@ -184,9 +203,32 @@ export default function App() {
               )}
             </div>
 
+            {/* Archived section toggle */}
+            {archivedClients.length > 0 && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowArchived(v => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-body font-medium"
+                  style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}
+                >
+                  <span>{showArchived ? t.hideArchived : t.showArchived(archivedClients.length)}</span>
+                  {showArchived ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {showArchived && (
+                  <div className="space-y-2 mt-2">
+                    <p className="text-xs font-display uppercase tracking-widest px-1 mb-2"
+                      style={{ color: 'var(--text-muted)' }}>{t.archivedSection}</p>
+                    {archivedClients.map(c => (
+                      <ClientRow key={c.id} client={c} t={t} role={role} lang={lang}
+                        onEdit={() => {}} archived={true} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* AD SLOT — Reserved for Google AdSense (320x50 banner) */}
             {/* AD_SLOT: GoogleAd placement="dashboard-footer" size="320x50" */}
-            {/* To activate: uncomment the script tag in index.html and replace this comment with the ad unit div */}
             <div style={{ height: '50px', marginTop: '16px' }} />
             {/* END AD SLOT */}
           </div>
@@ -205,7 +247,9 @@ export default function App() {
                 {allHistory.map(h => {
                   const client = allClients.find(c => c.id === h.clientId)
                   return (
-                    <div key={h.id} className="flex items-center gap-3 p-3 rounded-xl"
+                    <div key={h.id}
+                      onClick={() => setHistoryModal({ ...h, clientName: client?.name || null, client })}
+                      className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
                       style={{ background: 'var(--surface-1)', border: '1px solid var(--surface-3)' }}>
                       <div className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ background: h.action === 'paid' ? 'var(--lime)' : 'var(--text-muted)' }} />
@@ -219,6 +263,7 @@ export default function App() {
                       </div>
                       {h.amount && <span className="text-sm font-body font-medium flex-shrink-0"
                         style={{ color: 'var(--lime)' }}>${h.amount}</span>}
+                      <Pencil size={12} color="var(--text-muted)" style={{ flexShrink: 0, opacity: 0.4 }} />
                     </div>
                   )
                 })}
@@ -251,21 +296,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Pro */}
-              {!isPro && (
-                <div className="p-4 rounded-2xl" style={{ background: 'rgba(198,241,53,0.06)', border: '1px solid rgba(198,241,53,0.15)' }}>
-                  <p className="text-sm font-body font-medium mb-1" style={{ color: 'var(--lime)' }}>{t.proTitle}</p>
-                  <ul className="text-xs font-body mb-3 space-y-1" style={{ color: 'var(--text-secondary)' }}>
-                    {t.proFeatures.map(f => <li key={f}>· {f}</li>)}
-                  </ul>
-                  <a href="https://buy.stripe.com/PLACEHOLDER" target="_blank" rel="noopener noreferrer"
-                    className="block text-center py-3 rounded-xl text-sm font-body font-medium"
-                    style={{ background: 'var(--lime)', color: '#111' }}>
-                    {t.proBtn}
-                  </a>
-                </div>
-              )}
-
               {/* Legal */}
               <button onClick={() => setShowLegal(true)}
                 className="w-full p-4 rounded-2xl text-left flex items-center gap-3"
@@ -279,8 +309,15 @@ export default function App() {
                 Cobrar v1.0 · cobrarapp.com
                 <br />
                 <span style={{ color: 'var(--surface-4)' }}>
-                  {lang === 'es' ? 'Privado. Sin servidor. Sin cuenta.' : 'Private. No server. No account.'}
+                  {lang === 'es'
+                    ? 'Gratis. Privado. Sin servidor. Sin cuenta.'
+                    : 'Free & open source. Private. No server. No account.'}
                 </span>
+                <br />
+                <a href="https://github.com/awesomefunda/cobrarapp" target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}>
+                  MIT License · GitHub
+                </a>
               </p>
             </div>
           </div>
@@ -316,6 +353,112 @@ export default function App() {
         ))}
       </nav>
 
+      {/* History entry action sheet */}
+      {historyModal && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={() => setHistoryModal(null)}>
+          <div className="w-full max-w-[430px] mx-auto rounded-t-3xl p-6 pb-10 slide-up"
+            style={{ background: 'var(--surface-1)' }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex justify-between items-center mb-5">
+              <div>
+                <p className="font-body font-medium" style={{ color: 'var(--text-primary)' }}>
+                  {historyModal.clientName || 'Deleted client'}
+                </p>
+                <p className="text-xs mt-0.5 font-body capitalize"
+                  style={{ color: 'var(--text-muted)' }}>
+                  {historyModal.action}
+                  {historyModal.amount ? ` · $${historyModal.amount}` : ''}
+                  {' · '}
+                  {new Date(historyModal.timestamp).toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+              <button onClick={() => setHistoryModal(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full"
+                style={{ background: 'var(--surface-3)' }}>
+                <X size={16} color="var(--text-secondary)" />
+              </button>
+            </div>
+
+            {/* Edit Client button — only if client still exists */}
+            {historyModal.client && (
+              <button
+                onClick={() => {
+                  setEditClientState(historyModal.client)
+                  setShowForm(true)
+                  setHistoryModal(null)
+                  setTab('dashboard')
+                }}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl mb-2 text-sm font-body font-medium"
+                style={{ background: 'var(--surface-2)', color: 'var(--text-primary)' }}>
+                <Pencil size={16} color="var(--text-secondary)" />
+                {t.editThisClient}
+              </button>
+            )}
+
+            {/* Delete entry button */}
+            <button
+              onClick={async () => {
+                await deleteHistoryEntry(historyModal.id)
+                setHistoryModal(null)
+              }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl text-sm font-body font-medium"
+              style={{ background: 'rgba(255,92,92,0.08)', color: 'var(--red)' }}>
+              <Trash2 size={16} />
+              {t.deleteEntry}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Archive confirm sheet */}
+      {showArchiveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={() => setShowArchiveConfirm(false)}>
+          <div className="w-full max-w-[430px] mx-auto rounded-t-3xl p-6 pb-10 slide-up"
+            style={{ background: 'var(--surface-1)' }}
+            onClick={e => e.stopPropagation()}>
+
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2.5">
+                <Archive size={18} color="var(--text-secondary)" />
+                <p className="font-body font-medium" style={{ color: 'var(--text-primary)' }}>
+                  {t.archiveConfirmTitle}
+                </p>
+              </div>
+              <button onClick={() => setShowArchiveConfirm(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full"
+                style={{ background: 'var(--surface-3)' }}>
+                <X size={16} color="var(--text-secondary)" />
+              </button>
+            </div>
+
+            <p className="text-sm font-body mb-6" style={{ color: 'var(--text-secondary)' }}>
+              {t.archiveConfirmMsg}
+            </p>
+
+            <button
+              onClick={async () => {
+                await archivePaidClients()
+                setShowArchiveConfirm(false)
+                setShowArchived(false)
+              }}
+              className="w-full py-4 rounded-2xl font-body font-medium mb-2 text-sm"
+              style={{ background: 'var(--surface-3)', color: 'var(--text-primary)' }}>
+              {t.archiveConfirm}
+            </button>
+            <button
+              onClick={() => setShowArchiveConfirm(false)}
+              className="w-full py-3 rounded-2xl font-body text-sm"
+              style={{ color: 'var(--text-secondary)' }}>
+              {t.archiveCancel}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       {showForm && (
         <ClientForm
@@ -324,9 +467,7 @@ export default function App() {
           onSave={handleSaveClient}
           onDelete={handleDeleteClient}
           onClose={() => { setShowForm(false); setEditClientState(null) }}
-          t={t} isPro={isPro}
-          clientCount={allClients.length}
-          FREE_LIMIT={FREE_CLIENT_LIMIT}
+          t={t}
         />
       )}
       {showLegal && <LegalModal onClose={() => setShowLegal(false)} lang={lang} t={t} />}
