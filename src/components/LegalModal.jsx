@@ -13,10 +13,7 @@ Your client data, payment records, and usage history remain entirely on your dev
 3. THIRD-PARTY SERVICES
 Cobrar currently uses no third-party analytics, advertising, or tracking services. In the future, if advertising is introduced, this policy will be updated before any such service is activated, and users will be notified.
 
-4. PAYMENTS
-If you upgrade to Cobrar Pro, payment is processed by Stripe. Cobrar never sees or stores your payment card information. Stripe's privacy policy governs that transaction.
-
-5. CHILDREN
+4. CHILDREN
 Cobrar is not directed at children under 13. We do not knowingly collect any information from children.
 
 6. CHANGES
@@ -48,8 +45,8 @@ You are solely responsible for:
 - Maintaining your own backups
 - Any communications sent using the reminder feature
 
-5. FREE AND PRO TIERS
-The free tier limits you to 5 clients. The Pro tier unlocks unlimited clients for a one-time fee. All sales are final. Refunds are provided at the developer's sole discretion.
+5. FREE & OPEN SOURCE
+Cobrar is free and open source (MIT License). There are no paid tiers, subscriptions, or in-app purchases. The source code is available at https://github.com/awesomefunda/cobrarapp.
 
 6. INTELLECTUAL PROPERTY
 Cobrar and its branding are the property of the developer. You may not copy, reverse-engineer, or redistribute the App without permission.
