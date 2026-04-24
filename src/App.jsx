@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Settings, LayoutGrid, History, Shield, X, Trash2, Pencil, Archive, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react'
+import { Plus, Settings, LayoutGrid, History, Shield, X, Trash2, Pencil, Archive, ChevronDown, ChevronUp, CheckSquare, Square, Sparkles } from 'lucide-react'
 import { db, getSetting, setSetting, addClient, deleteClient, deleteHistoryEntry, archivePaidClients, bulkDeleteClients } from './db'
 import { translations } from './i18n'
 import Onboarding from './components/Onboarding'
@@ -28,6 +28,9 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  // Non-persisted preview flag — shows the welcome screen to existing users
+  // without flipping `onboarded` or touching any data.
+  const [previewOnboarding, setPreviewOnboarding] = useState(false)
 
   const t = translations[lang]
 
@@ -136,6 +139,12 @@ export default function App() {
   )
 
   if (!onboarded) return <Onboarding onComplete={handleOnboard} lang={lang} />
+
+  // Preview mode — existing users re-viewing the welcome screen.
+  // Non-destructive: dismiss returns to the app with all state intact.
+  if (previewOnboarding) {
+    return <Onboarding preview lang={lang} onClose={() => setPreviewOnboarding(false)} />
+  }
 
   return (
     <div className="flex flex-col" style={{ background: 'var(--surface-0)', minHeight: '100dvh' }}>
@@ -352,6 +361,14 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {/* Preview welcome screen — NON-destructive, just re-renders Onboarding */}
+              <button onClick={() => setPreviewOnboarding(true)}
+                className="w-full p-4 rounded-2xl text-left flex items-center gap-3"
+                style={{ background: 'var(--surface-1)', border: '1px solid var(--surface-3)' }}>
+                <Sparkles size={16} color="var(--lime)" />
+                <span className="text-sm font-body" style={{ color: 'var(--text-secondary)' }}>{t.previewOnboarding}</span>
+              </button>
 
               {/* Legal */}
               <button onClick={() => setShowLegal(true)}

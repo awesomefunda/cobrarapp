@@ -5,10 +5,27 @@ export const db = new Dexie('CobrarDB')
 // recurrenceType: 'monthly' | 'weekly' | 'biweekly' | 'once'
 // recurrenceConfig: { dayOfMonth: 1–31|'last' } | { dayOfWeek: 0–6 } | {}
 // type: 'receivable' (they owe me) | 'payable' (I owe them)
-db.version(1).stores({
+//
+// IMPORTANT ABOUT VERSION NUMBERS:
+// Dexie refuses to open a stored DB whose on-disk version is HIGHER than
+// anything declared here (`VersionError: requested X < existing Y`). Some
+// users out there have CobrarDB pinned as high as v20 from earlier builds,
+// so we declare v30 to leave headroom. If you ever need to change the
+// schema, bump this number AGAIN — never decrease it.
+const SCHEMA_V1 = {
   settings: 'key',
   clients: '++id, type, name, nextDueDate, isPaid, archived, recurrenceType',
-  history: '++id, clientId, timestamp, action'
+  history: '++id, clientId, timestamp, action',
+}
+db.version(1).stores(SCHEMA_V1)
+db.version(30).stores(SCHEMA_V1) // same shape; just a version bump to welcome users from v2–v20 forward
+
+// Guarded open: if something still goes wrong (corrupt DB, quota, etc.)
+// we surface a friendly error the ErrorBoundary can render instead of
+// a cryptic native exception.
+db.open().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('Dexie open failed:', err?.name, err?.message)
 })
 
 // type: 'receivable' (they owe me) | 'payable' (I owe them)

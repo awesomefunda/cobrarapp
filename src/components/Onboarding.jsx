@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, X } from 'lucide-react'
 
 const roles = [
   { key: 'gardener', emoji: '🌿', label_en: 'Gardener',  label_es: 'Jardinero/a' },
@@ -8,24 +8,52 @@ const roles = [
   { key: 'other',   emoji: '💼', label_en: 'Other',      label_es: 'Otro' },
 ]
 
-export default function Onboarding({ onComplete, lang }) {
+// `preview` mode renders the same welcome flow non-destructively: the user
+// can look at it and dismiss without any IndexedDB writes. Used from Settings
+// for users who already onboarded but want to see what new users see, or to
+// demo the app to a friend.
+export default function Onboarding({ onComplete, lang, preview = false, onClose }) {
   const [selected, setSelected] = useState(null)
   const es = lang === 'es'
 
-  // Keyboard shortcut: Enter submits when a role is selected. Desktop users
-  // were the main loss on the Windows machine — this lets them complete the
-  // flow without touching the mouse.
+  // Keyboard shortcuts:
+  //   Enter → submit (or close preview) when a role is selected
+  //   Esc   → close preview at any time
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Enter' && selected) onComplete(selected)
+      if (e.key === 'Enter' && selected) {
+        preview ? onClose?.() : onComplete(selected)
+      }
+      if (e.key === 'Escape' && preview) onClose?.()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selected, onComplete])
+  }, [selected, onComplete, preview, onClose])
 
   return (
     <div className="flex flex-col min-h-screen px-6 pt-14 pb-10 fade-in"
-      style={{ background: 'var(--surface-0)' }}>
+      style={{ background: 'var(--surface-0)', position: 'relative' }}>
+
+      {/* Preview-mode close button — only shown for users re-viewing the welcome flow */}
+      {preview && (
+        <button
+          onClick={() => onClose?.()}
+          aria-label={es ? 'Cerrar vista previa' : 'Close preview'}
+          className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
+          style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)', border: '1px solid var(--surface-3)' }}>
+          <X size={18} />
+        </button>
+      )}
+
+      {/* Preview-mode banner — signals "you're not locked in here" */}
+      {preview && (
+        <div className="mb-4 p-3 rounded-xl text-xs font-body text-center"
+          style={{ background: 'rgba(198,241,53,0.08)', border: '1px solid rgba(198,241,53,0.25)', color: 'var(--lime)' }}>
+          {es
+            ? 'Vista previa · Tus datos están intactos'
+            : 'Preview · Your data is untouched'}
+        </div>
+      )}
 
       {/* Logo */}
       <div className="flex items-center gap-2.5 mb-8">
@@ -84,17 +112,22 @@ export default function Onboarding({ onComplete, lang }) {
         ))}
       </div>
 
-      {/* CTA — disabled until role picked */}
+      {/* CTA — disabled until role picked (not in preview, where it's always active) */}
       <button
-        onClick={() => selected && onComplete(selected)}
-        disabled={!selected}
+        onClick={() => {
+          if (preview) { onClose?.(); return }
+          if (selected) onComplete(selected)
+        }}
+        disabled={!preview && !selected}
         className="w-full py-4 rounded-2xl font-body font-medium text-base transition-all"
         style={{
-          background: selected ? 'var(--lime)' : 'var(--surface-3)',
-          color: selected ? '#111' : 'var(--text-muted)',
-          cursor: selected ? 'pointer' : 'not-allowed'
+          background: (preview || selected) ? 'var(--lime)' : 'var(--surface-3)',
+          color: (preview || selected) ? '#111' : 'var(--text-muted)',
+          cursor: (preview || selected) ? 'pointer' : 'not-allowed'
         }}>
-        {es ? 'Entrar a Cobrar →' : 'Enter Cobrar →'}
+        {preview
+          ? (es ? 'Volver a la app' : 'Back to app')
+          : (es ? 'Entrar a Cobrar →' : 'Enter Cobrar →')}
       </button>
 
       <p className="text-center text-xs mt-5 font-body" style={{ color: 'var(--text-muted)' }}>
