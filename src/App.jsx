@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Settings, LayoutGrid, History, Shield, X, Trash2, Pencil, Archive, ChevronDown, ChevronUp, CheckSquare, Square, Sparkles } from 'lucide-react'
-import { db, getSetting, setSetting, addClient, deleteClient, deleteHistoryEntry, archivePaidClients, bulkDeleteClients } from './db'
+import { Plus, Settings, LayoutGrid, History, Shield, X, Trash2, Pencil, Archive, ChevronDown, ChevronUp, CheckSquare, Square, Sparkles, Download, AlertTriangle } from 'lucide-react'
+import { db, getSetting, setSetting, addClient, deleteClient, deleteHistoryEntry, archivePaidClients, bulkDeleteClients, exportAllData, getDataCounts, factoryReset } from './db'
 import { translations } from './i18n'
 import Onboarding from './components/Onboarding'
 import ClientRow from './components/ClientRow'
@@ -31,6 +31,10 @@ export default function App() {
   // Non-persisted preview flag — shows the welcome screen to existing users
   // without flipping `onboarded` or touching any data.
   const [previewOnboarding, setPreviewOnboarding] = useState(false)
+  // Factory-reset confirm sheet + loaded counts for the warning text.
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetCounts, setResetCounts] = useState({ clients: 0, history: 0 })
+  const [resetting, setResetting] = useState(false)
 
   const t = translations[lang]
 
@@ -131,6 +135,43 @@ export default function App() {
     exitSelectMode()
   }
 
+  // Download a full backup as JSON. Safe to call anytime; no data is modified.
+  const handleExportBackup = async () => {
+    const snapshot = await exportAllData()
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const stamp = new Date().toISOString().slice(0, 10)
+    a.href = url
+    a.download = `cobrar-backup-${stamp}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    // Revoke on next tick so the download has started
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  // Open the factory-reset confirmation sheet. Pulls counts so the warning
+  // text shows the user exactly what they're about to lose.
+  const handleOpenResetConfirm = async () => {
+    const counts = await getDataCounts()
+    setResetCounts(counts)
+    setShowResetConfirm(true)
+  }
+
+  // Final irreversible step. Shows a brief "Resetting…" state, then reloads.
+  const handleConfirmReset = async () => {
+    setResetting(true)
+    try {
+      await factoryReset()
+    } catch (e) {
+      console.error('factoryReset failed', e)
+      setResetting(false)
+    }
+    // factoryReset() calls window.location.replace on success, so we never
+    // reach here unless it threw.
+  }
+
   if (!ready) return (
     <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--surface-0)' }}>
       <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
@@ -170,6 +211,18 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        {/* Persistent tagline — keeps the brand promise visible for returning
+            users, not just first-timers. Only shown on dashboard; history and
+            settings have their own focused headers. */}
+        {tab === 'dashboard' && (
+          <p className="text-xs font-body mb-4" style={{ color: 'var(--text-muted)' }}>
+            {lang === 'es' ? 'Cobra a tiempo, ' : 'Get paid on time, '}
+            <span style={{ color: 'var(--lime)' }}>
+              {lang === 'es' ? 'siempre.' : 'every time.'}
+            </span>
+          </p>
+        )}
 
         {/* Mode toggle + Select button */}
         {tab === 'dashboard' && (
@@ -257,6 +310,19 @@ export default function App() {
                   <p className="text-3xl mb-3">🌿</p>
                   <p className="text-sm font-body mb-1" style={{ color: 'var(--text-secondary)' }}>{t.noClients}</p>
                   <p className="text-xs font-body" style={{ color: 'var(--text-muted)' }}>{t.noClientsHint}</p>
+                  {/* Discoverable "what is this?" link for users who skipped or forgot onboarding.
+                      Shown only on empty state — disappears once they have clients. */}
+                  <button
+                    onClick={() => setPreviewOnboarding(true)}
+                    className="mt-5 inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-body"
+                    style={{
+                      background: 'rgba(198,241,53,0.08)',
+                      color: 'var(--lime)',
+                      border: '1px solid rgba(198,241,53,0.25)',
+                    }}>
+                    <Sparkles size={12} />
+                    {t.whatIsCobrar}
+                  </button>
                 </div>
               ) : (
                 visibleClients.map(c => (
@@ -378,11 +444,35 @@ export default function App() {
                 <span className="text-sm font-body" style={{ color: 'var(--text-secondary)' }}>{t.legalTitle}</span>
               </button>
 
+              {/* Export backup — non-destructive; download all data as JSON */}
+              <button onClick={handleExportBackup}
+                className="w-full p-4 rounded-2xl text-left flex items-start gap-3"
+                style={{ background: 'var(--surface-1)', border: '1px solid var(--surface-3)' }}>
+                <Download size={16} color="var(--text-secondary)" style={{ marginTop: 2 }} />
+                <div className="flex-1">
+                  <p className="text-sm font-body" style={{ color: 'var(--text-secondary)' }}>{t.exportBackup}</p>
+                  <p className="text-xs font-body mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.exportBackupHint}</p>
+                </div>
+              </button>
+
+              {/* Factory reset — DESTRUCTIVE; opens confirm sheet */}
+              <button onClick={handleOpenResetConfirm}
+                className="w-full p-4 rounded-2xl text-left flex items-start gap-3"
+                style={{ background: 'rgba(255,92,92,0.06)', border: '1px solid rgba(255,92,92,0.2)' }}>
+                <AlertTriangle size={16} color="var(--red)" style={{ marginTop: 2 }} />
+                <div className="flex-1">
+                  <p className="text-sm font-body font-medium" style={{ color: 'var(--red)' }}>{t.factoryReset}</p>
+                  <p className="text-xs font-body mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.factoryResetHint}</p>
+                </div>
+              </button>
+
               {/* Version */}
               <p className="text-center text-xs font-body pt-4" style={{ color: 'var(--text-muted)' }}>
                 Cobrar v1.0 · cobrarapp.com
                 <br />
-                <span style={{ color: 'var(--surface-4)' }}>
+                {/* Was --surface-4 (#2a2a2a) which is invisible on Windows LCDs.
+                    Upgraded to --text-muted for consistent legibility. */}
+                <span style={{ color: 'var(--text-muted)' }}>
                   {lang === 'es'
                     ? 'Gratis. Privado. Sin servidor. Sin cuenta.'
                     : 'Free & open source. Private. No server. No account.'}
@@ -434,9 +524,14 @@ export default function App() {
         ].map(({ key, icon: Icon, label }) => (
           <button key={key} onClick={() => setTab(key)}
             className="flex flex-col items-center gap-1 py-1 px-4">
-            <Icon size={20} color={tab === key ? 'var(--lime)' : 'var(--surface-4)'} strokeWidth={tab === key ? 2 : 1.5} />
+            {/* Inactive tabs: use --text-secondary instead of --surface-4.
+                --surface-4 (#2a2a2a) against --surface-0 (#0a0a0a) is only
+                ~1.5:1 contrast, which renders invisible on typical Windows
+                LCDs. --text-secondary (#888) gives ~6:1 and reads on every
+                screen. */}
+            <Icon size={20} color={tab === key ? 'var(--lime)' : 'var(--text-secondary)'} strokeWidth={tab === key ? 2 : 1.5} />
             <span className="text-[9px] font-display uppercase tracking-widest"
-              style={{ color: tab === key ? 'var(--lime)' : 'var(--surface-4)' }}>
+              style={{ color: tab === key ? 'var(--lime)' : 'var(--text-secondary)' }}>
               {label}
             </span>
           </button>
@@ -545,6 +640,74 @@ export default function App() {
               style={{ color: 'var(--text-secondary)' }}>
               {t.archiveCancel}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Factory-reset confirm sheet — destructive action with export-first escape hatch */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={() => !resetting && setShowResetConfirm(false)}>
+          <div className="w-full max-w-[430px] mx-auto rounded-t-3xl p-6 pb-10 slide-up"
+            style={{ background: 'var(--surface-1)' }}
+            onClick={e => e.stopPropagation()}>
+
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle size={18} color="var(--red)" />
+                <p className="font-body font-medium" style={{ color: 'var(--text-primary)' }}>
+                  {t.resetConfirmTitle}
+                </p>
+              </div>
+              {!resetting && (
+                <button onClick={() => setShowResetConfirm(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full"
+                  style={{ background: 'var(--surface-3)' }}>
+                  <X size={16} color="var(--text-secondary)" />
+                </button>
+              )}
+            </div>
+
+            <p className="text-sm font-body mb-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              {t.resetConfirmBody(resetCounts.clients, resetCounts.history)}
+            </p>
+
+            {/* Download backup first — clearly offered but not required */}
+            <button
+              onClick={handleExportBackup}
+              disabled={resetting}
+              className="w-full py-3 rounded-2xl font-body text-sm mb-2 flex items-center justify-center gap-2"
+              style={{
+                background: 'var(--surface-3)',
+                color: 'var(--text-primary)',
+                opacity: resetting ? 0.5 : 1,
+              }}>
+              <Download size={15} />
+              {t.resetBackupFirst}
+            </button>
+
+            {/* The irreversible action */}
+            <button
+              onClick={handleConfirmReset}
+              disabled={resetting}
+              className="w-full py-4 rounded-2xl font-body font-medium mb-2 text-sm"
+              style={{
+                background: 'var(--red)',
+                color: '#fff',
+                opacity: resetting ? 0.5 : 1,
+                cursor: resetting ? 'not-allowed' : 'pointer',
+              }}>
+              {resetting ? t.resetInProgress : t.resetConfirmBtn}
+            </button>
+
+            {!resetting && (
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="w-full py-3 rounded-2xl font-body text-sm"
+                style={{ color: 'var(--text-secondary)' }}>
+                {t.resetCancel}
+              </button>
+            )}
           </div>
         </div>
       )}

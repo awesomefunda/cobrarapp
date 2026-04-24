@@ -100,7 +100,10 @@ export default function ClientRow({ client, t, role, lang, onEdit, archived = fa
         <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
           {selected
             ? <CheckCircle2 size={22} color="var(--lime)" strokeWidth={2} />
-            : <Circle size={22} color="var(--surface-4)" strokeWidth={1.5} />}
+            /* --surface-4 (#2a2a2a) is too low-contrast on Windows LCDs,
+               making the unchecked-select circle invisible. --text-secondary
+               (#888) reads on every screen. */
+            : <Circle size={22} color="var(--text-secondary)" strokeWidth={1.5} />}
         </div>
       ) : (
         <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-display font-medium flex-shrink-0"
