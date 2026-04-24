@@ -35,11 +35,14 @@ function getInitialState(client, mode) {
     }
   }
 
-  // Edit mode
+  // Edit mode — CRITICAL: include the id so handleSaveClient knows this is
+  // an update, not a create. Previous bug: id was omitted, so every edit
+  // produced a duplicate record and left the original untouched.
   const recurrenceType = client.recurrenceType || 'monthly'
   const recurrenceConfig = client.recurrenceConfig || {}
 
   return {
+    id: client.id,
     name: client.name || '',
     address: client.address || '',
     amount: client.amount || '',
@@ -47,6 +50,12 @@ function getInitialState(client, mode) {
     recurrenceType,
     recurrenceConfig,
     nextDueDate: client.nextDueDate ? client.nextDueDate.split('T')[0] : today,
+    // Preserve paid state on edit — otherwise editing a paid client silently
+    // reverts it to unpaid.
+    isPaid: !!client.isPaid,
+    lastPaidDate: client.lastPaidDate || null,
+    createdAt: client.createdAt,
+    archived: !!client.archived,
   }
 }
 
@@ -98,11 +107,14 @@ export default function ClientForm({ client, mode, onSave, onDelete, onClose, t,
       nextDueISO = new Date(form.nextDueDate + 'T00:00:00').toISOString()
     }
 
+    // For new clients, default to unpaid. For edits, preserve whatever state
+    // the client was already in — editing the form should never silently
+    // mark a paid client unpaid.
     onSave({
       ...form,
       nextDueDate: nextDueISO,
       frequency: form.recurrenceType, // keep legacy compat
-      isPaid: false,
+      isPaid: isEdit ? !!form.isPaid : false,
     })
   }
 

@@ -500,17 +500,26 @@ export default function App() {
         </div>
       )}
 
-      {/* FAB */}
+      {/* FAB — wrapped in a fixed container that's capped at the app frame
+          width (430px) and centered. Before this, `fixed right-5` anchored
+          the FAB to the viewport edge, which on wide desktop monitors put
+          it hundreds of pixels away from the actual content. Now it sits at
+          the right edge of the centered app frame on any screen size.
+          Also bumped to 64px on sm+ screens for easier mouse targeting. */}
       {tab === 'dashboard' && !selectMode && (
-        <button
-          onClick={() => { setEditClientState(null); setShowForm(true) }}
-          aria-label={t.addClient}
-          className={`fixed bottom-24 right-5 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40 ${
-            visibleClients.length === 0 ? 'pulse' : ''
-          }`}
-          style={{ background: 'var(--lime)' }}>
-          <Plus size={24} color="#111" strokeWidth={2.5} />
-        </button>
+        <div className="fixed left-0 right-0 bottom-24 max-w-[430px] mx-auto pointer-events-none z-40 px-5">
+          <div className="flex justify-end">
+            <button
+              onClick={() => { setEditClientState(null); setShowForm(true) }}
+              aria-label={t.addClient}
+              className={`pointer-events-auto w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg ${
+                visibleClients.length === 0 ? 'pulse' : ''
+              }`}
+              style={{ background: 'var(--lime)' }}>
+              <Plus size={26} color="#111" strokeWidth={2.5} />
+            </button>
+          </div>
+        </div>
       )}
 
 
