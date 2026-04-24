@@ -15,35 +15,51 @@
   --text-primary: #e8e8e8;
   --text-secondary: #888888;
   --text-muted: #444444;
+
+  /* Shared app-frame width. Kept on #root so we keep the phone-like container
+     on desktop, but the surrounding body is no longer clipped. */
+  --app-max-width: 430px;
 }
 
-* { -webkit-tap-highlight-color: transparent; }
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
 html, body {
   background: var(--surface-0);
   color: var(--text-primary);
-  font-family: 'DM Sans', sans-serif;
+  /* System font fallback so the app is legible even if Google Fonts is blocked
+     (corporate network, ad-blocker, offline first paint). */
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   overscroll-behavior: none;
-  min-height: 100%;
-  height: 100%;
+  margin: 0;
+  /* Use dynamic viewport units where supported — fixes mobile browser chrome
+     resize jumps. Falls back to vh everywhere else. */
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 #root {
-  min-height: 100%;
-  height: 100%;
-  max-width: 430px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-width: var(--app-max-width);
   margin: 0 auto;
   position: relative;
   overflow-x: hidden;
-  overflow-y: auto;
+  /* Soft shadow on desktop so the phone-like frame feels intentional. */
+  box-shadow: 0 0 0 1px var(--surface-2);
 }
 
-/* Scrollbars hidden */
+@media (min-width: 640px) {
+  body { background: #050505; }
+  #root { box-shadow: 0 0 64px rgba(0,0,0,0.6), 0 0 0 1px var(--surface-2); }
+}
+
+/* Scrollbars hidden on webkit, still functional for keyboard users */
 ::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; }
 
 /* Smooth tap feedback */
 button:active { transform: scale(0.96); transition: transform 0.08s; }
+button { font-family: inherit; }
 
 /* Input resets */
 input, select, textarea {
@@ -52,20 +68,24 @@ input, select, textarea {
   color: var(--text-primary);
   border-radius: 12px;
   padding: 12px 14px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: inherit;
   font-size: 15px;
   width: 100%;
   outline: none;
 }
-input:focus, select:focus { border-color: var(--lime); }
+input:focus, select:focus, textarea:focus { border-color: var(--lime); }
 select option { background: var(--surface-2); }
 
 /* Lime glow on active elements */
 .lime-glow { box-shadow: 0 0 0 1px var(--lime), 0 0 12px rgba(198,241,53,0.15); }
 
-/* Slide up animation */
+/* Slide / fade animations */
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes slideDown {
+  from { transform: translateY(-120%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 @keyframes fadeIn {
@@ -73,6 +93,7 @@ select option { background: var(--surface-2); }
   to { opacity: 1; transform: translateY(0); }
 }
 .slide-up { animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+.slide-down { animation: slideDown 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
 .fade-in { animation: fadeIn 0.2s ease forwards; }
 
 /* Status dot pulse */
@@ -81,3 +102,11 @@ select option { background: var(--surface-2); }
   50% { opacity: 0.4; }
 }
 .pulse { animation: pulse 2s ease-in-out infinite; }
+
+/* Respect reduced-motion users */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

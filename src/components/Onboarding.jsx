@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 
 const roles = [
@@ -11,6 +11,17 @@ const roles = [
 export default function Onboarding({ onComplete, lang }) {
   const [selected, setSelected] = useState(null)
   const es = lang === 'es'
+
+  // Keyboard shortcut: Enter submits when a role is selected. Desktop users
+  // were the main loss on the Windows machine — this lets them complete the
+  // flow without touching the mouse.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Enter' && selected) onComplete(selected)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected, onComplete])
 
   return (
     <div className="flex flex-col min-h-screen px-6 pt-14 pb-10 fade-in"

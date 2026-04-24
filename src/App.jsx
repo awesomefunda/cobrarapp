@@ -8,6 +8,7 @@ import ClientRow from './components/ClientRow'
 import ClientForm from './components/ClientForm'
 import BackupBanner from './components/BackupBanner'
 import LegalModal from './components/LegalModal'
+import UpdatePrompt from './components/UpdatePrompt'
 
 const TABS = ['dashboard', 'history', 'settings']
 
@@ -137,7 +138,10 @@ export default function App() {
   if (!onboarded) return <Onboarding onComplete={handleOnboard} lang={lang} />
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: 'var(--surface-0)' }}>
+    <div className="flex flex-col" style={{ background: 'var(--surface-0)', minHeight: '100dvh' }}>
+
+      {/* Service-worker update banner + "you're on the latest version" toast */}
+      <UpdatePrompt lang={lang} />
 
       {/* Header */}
       <header className="px-5 pt-12 pb-4 flex-shrink-0">
@@ -393,7 +397,10 @@ export default function App() {
       {tab === 'dashboard' && !selectMode && (
         <button
           onClick={() => { setEditClientState(null); setShowForm(true) }}
-          className="fixed bottom-24 right-5 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
+          aria-label={t.addClient}
+          className={`fixed bottom-24 right-5 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40 ${
+            visibleClients.length === 0 ? 'pulse' : ''
+          }`}
           style={{ background: 'var(--lime)' }}>
           <Plus size={24} color="#111" strokeWidth={2.5} />
         </button>
