@@ -2,19 +2,13 @@ import Dexie from 'dexie'
 
 export const db = new Dexie('CobrarDB')
 
+// recurrenceType: 'monthly' | 'weekly' | 'biweekly' | 'once'
+// recurrenceConfig: { dayOfMonth: 1–31|'last' } | { dayOfWeek: 0–6 } | {}
+// type: 'receivable' (they owe me) | 'payable' (I owe them)
 db.version(1).stores({
   settings: 'key',
-  clients: '++id, type, name, nextDueDate, isPaid',
+  clients: '++id, type, name, nextDueDate, isPaid, archived, recurrenceType',
   history: '++id, clientId, timestamp, action'
-})
-
-// v2: adds `archived` field to clients for monthly clear/restore
-db.version(2).stores({
-  settings: 'key',
-  clients: '++id, type, name, nextDueDate, isPaid, archived',
-  history: '++id, clientId, timestamp, action'
-}).upgrade(tx => {
-  return tx.table('clients').toCollection().modify(c => { c.archived = false })
 })
 
 // type: 'receivable' (they owe me) | 'payable' (I owe them)
@@ -42,7 +36,7 @@ export async function markPaid(clientId) {
   const client = await db.clients.get(clientId)
   if (!client) return
   const now = new Date()
-  const next = calcNextDue(now, client.frequency)
+  const next = calcNextDue(now, client.recurrenceType || 'monthly', client.recurrenceConfig || {})
   await db.clients.update(clientId, {
     isPaid: true,
     lastPaidDate: now.toISOString(),
@@ -74,6 +68,15 @@ export async function deleteClient(clientId) {
   await db.history.where('clientId').equals(clientId).delete()
 }
 
+export async function bulkDeleteClients(ids) {
+  await db.transaction('rw', db.clients, db.history, async () => {
+    await db.clients.bulkDelete(ids)
+    for (const id of ids) {
+      await db.history.where('clientId').equals(id).delete()
+    }
+  })
+}
+
 // Delete a single history log entry (keeps the client intact)
 export async function deleteHistoryEntry(id) {
   await db.history.delete(id)
@@ -92,11 +95,53 @@ export async function restoreClient(clientId) {
   await db.clients.update(clientId, { archived: false, isPaid: false })
 }
 
-export function calcNextDue(fromDate, frequency) {
+/**
+ * Compute the next due date after `fromDate` given recurrence settings.
+ * recurrenceType: 'monthly' | 'weekly' | 'biweekly' | 'once'
+ * recurrenceConfig:
+ *   monthly  → { dayOfMonth: 1–31 | 'last' }
+ *   weekly   → { dayOfWeek: 0–6 }  (0 = Sunday)
+ *   biweekly → {}
+ *   once     → {}  (no recurrence; nextDueDate stays as-is)
+ */
+export function calcNextDue(fromDate, recurrenceType, recurrenceConfig = {}) {
   const d = new Date(fromDate)
-  if (frequency === 'weekly') d.setDate(d.getDate() + 7)
-  else if (frequency === 'biweekly') d.setDate(d.getDate() + 14)
-  else if (frequency === 'monthly') d.setMonth(d.getMonth() + 1)
+
+  if (recurrenceType === 'once') {
+    return d // one-time: never advances automatically
+  }
+
+  if (recurrenceType === 'monthly') {
+    const { dayOfMonth = 1 } = recurrenceConfig
+    const next = new Date(d)
+    next.setMonth(next.getMonth() + 1)
+    if (dayOfMonth === 'last') {
+      next.setDate(1)
+      next.setMonth(next.getMonth() + 1)
+      next.setDate(0)
+    } else {
+      const maxDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+      next.setDate(Math.min(dayOfMonth, maxDay))
+    }
+    return next
+  }
+
+  if (recurrenceType === 'weekly') {
+    const { dayOfWeek = d.getDay() } = recurrenceConfig
+    const next = new Date(d)
+    const current = next.getDay()
+    let daysUntil = (dayOfWeek - current + 7) % 7
+    if (daysUntil === 0) daysUntil = 7
+    next.setDate(next.getDate() + daysUntil)
+    return next
+  }
+
+  if (recurrenceType === 'biweekly') {
+    const next = new Date(d)
+    next.setDate(next.getDate() + 14)
+    return next
+  }
+
   return d
 }
 

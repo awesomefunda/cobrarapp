@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
-import { Check, MessageCircle, Pencil, RotateCcw } from 'lucide-react'
+import { Check, MessageCircle, Pencil, RotateCcw, CheckCircle2, Circle } from 'lucide-react'
 import { markPaid, markUnpaid, logReminder, restoreClient } from '../db'
 import { differenceInDays, format } from 'date-fns'
 import { es as esLocale, enUS } from 'date-fns/locale'
 
-export default function ClientRow({ client, t, role, lang, onEdit, archived = false }) {
+export default function ClientRow({ client, t, role, lang, onEdit, archived = false, selectable = false, selected = false, onSelect }) {
   const [flashing, setFlashing] = useState(false)
   const now = new Date()
   const due = new Date(client.nextDueDate)
@@ -74,21 +74,40 @@ export default function ClientRow({ client, t, role, lang, onEdit, archived = fa
     return 'var(--text-secondary)'
   }
 
+  const handleRowClick = () => {
+    if (selectable) { onSelect?.(client.id); return }
+    if (!archived) onEdit(client)
+  }
+
   return (
     <div
-      onClick={() => !archived && onEdit(client)}
-      className={`flex items-center gap-3 py-4 px-4 rounded-2xl transition-all ${archived ? '' : 'cursor-pointer'}`}
+      onClick={handleRowClick}
+      className="flex items-center gap-3 py-4 px-4 rounded-2xl transition-all cursor-pointer"
       style={{
-        background: archived ? 'var(--surface-1)' : isOverdue ? 'rgba(255,92,92,0.04)' : 'var(--surface-1)',
-        border: `1px solid ${isOverdue && !archived ? 'rgba(255,92,92,0.15)' : 'var(--surface-3)'}`,
-        opacity: (client.isPaid && !archived) ? 0.45 : archived ? 0.6 : 1
+        background: selected
+          ? 'rgba(198,241,53,0.06)'
+          : archived ? 'var(--surface-1)'
+          : isOverdue ? 'rgba(255,92,92,0.04)' : 'var(--surface-1)',
+        border: `1px solid ${
+          selected ? 'rgba(198,241,53,0.3)'
+          : isOverdue && !archived ? 'rgba(255,92,92,0.15)'
+          : 'var(--surface-3)'}`,
+        opacity: (client.isPaid && !archived && !selectable) ? 0.45 : archived ? 0.6 : 1
       }}
     >
-      {/* Avatar */}
-      <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-display font-medium flex-shrink-0"
-        style={{ background: avatarBg(), color: avatarColor() }}>
-        {initials}
-      </div>
+      {/* Avatar / Checkbox */}
+      {selectable ? (
+        <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
+          {selected
+            ? <CheckCircle2 size={22} color="var(--lime)" strokeWidth={2} />
+            : <Circle size={22} color="var(--surface-4)" strokeWidth={1.5} />}
+        </div>
+      ) : (
+        <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-display font-medium flex-shrink-0"
+          style={{ background: avatarBg(), color: avatarColor() }}>
+          {initials}
+        </div>
+      )}
 
       {/* Info */}
       <div className="flex-1 min-w-0">
@@ -108,9 +127,9 @@ export default function ClientRow({ client, t, role, lang, onEdit, archived = fa
         </p>
       </div>
 
-      {/* Actions */}
+      {/* Actions — hidden in select mode */}
       <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-        {archived ? (
+        {selectable ? null : archived ? (
           /* Archived mode: show Restore button only */
           <button
             onClick={handleRestore}
@@ -121,6 +140,7 @@ export default function ClientRow({ client, t, role, lang, onEdit, archived = fa
             {t.restore}
           </button>
         ) : (
+          /* Normal mode */
           <>
             {!client.isPaid && (
               <button

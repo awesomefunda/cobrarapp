@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Settings, LayoutGrid, History, Shield, X, Trash2, Pencil, Archive, ChevronDown, ChevronUp } from 'lucide-react'
-import { db, getSetting, setSetting, addClient, deleteClient, deleteHistoryEntry, archivePaidClients } from './db'
+import { Plus, Settings, LayoutGrid, History, Shield, X, Trash2, Pencil, Archive, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react'
+import { db, getSetting, setSetting, addClient, deleteClient, deleteHistoryEntry, archivePaidClients, bulkDeleteClients } from './db'
 import { translations } from './i18n'
 import Onboarding from './components/Onboarding'
 import ClientRow from './components/ClientRow'
@@ -22,9 +22,11 @@ export default function App() {
   const [editClient, setEditClientState] = useState(null)
   const [showLegal, setShowLegal] = useState(false)
   const [showBackup, setShowBackup] = useState(false)
-  const [historyModal, setHistoryModal] = useState(null)   // selected history entry
+  const [historyModal, setHistoryModal] = useState(null)
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   const t = translations[lang]
 
@@ -103,6 +105,28 @@ export default function App() {
     setShowBackup(false)
   }
 
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()) }
+
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === visibleClients.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(visibleClients.map(c => c.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (!selectedIds.size) return
+    await bulkDeleteClients([...selectedIds])
+    exitSelectMode()
+  }
+
   if (!ready) return (
     <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--surface-0)' }}>
       <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
@@ -134,20 +158,34 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mode toggle */}
+        {/* Mode toggle + Select button */}
         {tab === 'dashboard' && (
-          <div className="flex p-1 rounded-xl gap-1" style={{ background: 'var(--surface-2)' }}>
-            {['receivable', 'payable'].map(m => (
-              <button key={m}
-                onClick={() => setMode(m)}
-                className="flex-1 py-2.5 rounded-lg text-sm font-body font-medium transition-all"
-                style={{
-                  background: mode === m ? 'var(--surface-4)' : 'transparent',
-                  color: mode === m ? 'var(--lime)' : 'var(--text-secondary)'
-                }}>
-                {m === 'receivable' ? t.modeReceivable : t.modePayable}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="flex flex-1 p-1 rounded-xl gap-1" style={{ background: 'var(--surface-2)' }}>
+              {['receivable', 'payable'].map(m => (
+                <button key={m}
+                  onClick={() => { setMode(m); exitSelectMode() }}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-body font-medium transition-all"
+                  style={{
+                    background: mode === m ? 'var(--surface-4)' : 'transparent',
+                    color: mode === m ? 'var(--lime)' : 'var(--text-secondary)'
+                  }}>
+                  {m === 'receivable' ? t.modeReceivable : t.modePayable}
+                </button>
+              ))}
+            </div>
+            {/* Select toggle */}
+            <button
+              onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+              className="h-10 px-3 rounded-xl text-xs font-body font-medium flex items-center gap-1.5"
+              style={{
+                background: selectMode ? 'rgba(198,241,53,0.15)' : 'var(--surface-2)',
+                color: selectMode ? 'var(--lime)' : 'var(--text-secondary)',
+                border: selectMode ? '1px solid rgba(198,241,53,0.3)' : '1px solid transparent'
+              }}>
+              {selectMode ? <X size={13} /> : <CheckSquare size={13} />}
+              {selectMode ? t.cancelSelect : t.selectEntries}
+            </button>
           </div>
         )}
       </header>
@@ -187,6 +225,18 @@ export default function App() {
               </button>
             )}
 
+            {/* Select All bar */}
+            {selectMode && visibleClients.length > 0 && (
+              <button onClick={handleSelectAll}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl mb-2 text-xs font-body font-medium"
+                style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>
+                <span>{t.selectAll}</span>
+                <span style={{ color: selectedIds.size > 0 ? 'var(--lime)' : 'var(--text-muted)' }}>
+                  {selectedIds.size}/{visibleClients.length}
+                </span>
+              </button>
+            )}
+
             {/* Client list */}
             <div className="space-y-2">
               {visibleClients.length === 0 ? (
@@ -198,7 +248,10 @@ export default function App() {
               ) : (
                 visibleClients.map(c => (
                   <ClientRow key={c.id} client={c} t={t} role={role} lang={lang}
-                    onEdit={(c) => { setEditClientState(c); setShowForm(true) }} />
+                    onEdit={(c) => { setEditClientState(c); setShowForm(true) }}
+                    selectable={selectMode}
+                    selected={selectedIds.has(c.id)}
+                    onSelect={toggleSelect} />
                 ))
               )}
             </div>
@@ -324,8 +377,20 @@ export default function App() {
         )}
       </main>
 
+      {/* Bulk delete bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-24 left-4 right-4 max-w-[398px] mx-auto z-40">
+          <button onClick={handleBulkDelete}
+            className="w-full py-4 rounded-2xl font-body font-medium flex items-center justify-center gap-2 shadow-lg"
+            style={{ background: 'var(--red)', color: '#fff' }}>
+            <Trash2 size={16} />
+            {t.deleteSelected(selectedIds.size)}
+          </button>
+        </div>
+      )}
+
       {/* FAB */}
-      {tab === 'dashboard' && (
+      {tab === 'dashboard' && !selectMode && (
         <button
           onClick={() => { setEditClientState(null); setShowForm(true) }}
           className="fixed bottom-24 right-5 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-40"
@@ -333,6 +398,7 @@ export default function App() {
           <Plus size={24} color="#111" strokeWidth={2.5} />
         </button>
       )}
+
 
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto flex items-center justify-around px-6 pb-8 pt-3 z-30"
@@ -468,6 +534,7 @@ export default function App() {
           onDelete={handleDeleteClient}
           onClose={() => { setShowForm(false); setEditClientState(null) }}
           t={t}
+          lang={lang}
         />
       )}
       {showLegal && <LegalModal onClose={() => setShowLegal(false)} lang={lang} t={t} />}

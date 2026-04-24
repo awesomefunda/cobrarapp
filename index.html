@@ -68,7 +68,35 @@
   <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <!-- Pre-React splash — visible before JS loads and to search engine crawlers -->
+    <div id="pre-splash" style="
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      min-height:100vh; background:#0a0a0a; color:#e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding:2rem; text-align:center; gap:1rem;">
+      <div style="width:56px;height:56px;background:#c6f135;border-radius:16px;
+        display:flex;align-items:center;justify-content:center;
+        font-size:1.25rem;font-weight:700;color:#111;margin-bottom:.5rem;">Co</div>
+      <h1 style="font-size:2rem;font-weight:700;margin:0;color:#e8e8e8;">Cobrar</h1>
+      <p style="font-size:1.1rem;color:#888;margin:0;">Get paid on time, every time.</p>
+      <p style="font-size:.9rem;color:#444;max-width:320px;margin:.5rem 0 0;line-height:1.6;">
+        Track who owes you and who you owe — clients, rent, daycare, and more.
+        Private, offline, and completely free. No account needed.
+      </p>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem;">
+        <span style="background:#1e1e1e;color:#888;padding:.4rem .9rem;border-radius:10px;font-size:.8rem;">Private</span>
+        <span style="background:#1e1e1e;color:#888;padding:.4rem .9rem;border-radius:10px;font-size:.8rem;">Offline</span>
+        <span style="background:#1e1e1e;color:#888;padding:.4rem .9rem;border-radius:10px;font-size:.8rem;">Free forever</span>
+      </div>
+    </div>
+  </div>
+  <noscript>
+    <div style="font-family:sans-serif;text-align:center;padding:3rem;background:#0a0a0a;color:#888;min-height:100vh;">
+      <h1 style="color:#e8e8e8;">Cobrar</h1>
+      <p>Cobrar requires JavaScript to run. Please enable JavaScript in your browser.</p>
+    </div>
+  </noscript>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
