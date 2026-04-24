@@ -162,6 +162,88 @@ export function calcNextDue(fromDate, recurrenceType, recurrenceConfig = {}) {
   return d
 }
 
+/**
+ * Bundle every piece of user data into a portable JSON snapshot.
+ * Use this as a backup before destructive actions (factory reset),
+ * or to transfer data between devices.
+ */
+export async function exportAllData() {
+  const [clients, history, settings] = await Promise.all([
+    db.clients.toArray(),
+    db.history.toArray(),
+    db.settings.toArray(),
+  ])
+  return {
+    app: 'cobrar',
+    schemaVersion: 30,
+    exportedAt: new Date().toISOString(),
+    counts: { clients: clients.length, history: history.length, settings: settings.length },
+    data: { clients, history, settings },
+  }
+}
+
+/**
+ * Restore a snapshot produced by exportAllData(). Overwrites everything.
+ * Caller is expected to confirm with the user first.
+ */
+export async function importAllData(snapshot) {
+  if (!snapshot || snapshot.app !== 'cobrar' || !snapshot.data) {
+    throw new Error('Not a valid Cobrar backup file')
+  }
+  const { clients = [], history = [], settings = [] } = snapshot.data
+  await db.transaction('rw', db.clients, db.history, db.settings, async () => {
+    await db.clients.clear()
+    await db.history.clear()
+    await db.settings.clear()
+    if (clients.length) await db.clients.bulkAdd(clients)
+    if (history.length) await db.history.bulkAdd(history)
+    if (settings.length) await db.settings.bulkPut(settings)
+  })
+  return { clients: clients.length, history: history.length, settings: settings.length }
+}
+
+/**
+ * Get counts without pulling the full records. Used by the reset
+ * confirmation dialog so users see what they're about to lose.
+ */
+export async function getDataCounts() {
+  const [clients, history] = await Promise.all([
+    db.clients.count(),
+    db.history.count(),
+  ])
+  return { clients, history }
+}
+
+/**
+ * FACTORY RESET. Irreversible. Wipes IndexedDB, service workers, caches,
+ * and web storage, then reloads to a fresh onboarding flow. Caller MUST
+ * confirm with the user before invoking.
+ *
+ * Sequencing matters: clear browser-storage first (cheap, fast, survivable
+ * if interrupted), then unregister SW + caches, and delete the DB LAST —
+ * if something dies mid-reset, the DB is the thing we most want preserved.
+ */
+export async function factoryReset() {
+  try { localStorage.clear() } catch {}
+  try { sessionStorage.clear() } catch {}
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map((r) => r.unregister()))
+    }
+  } catch {}
+  try {
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((k) => caches.delete(k)))
+    }
+  } catch {}
+  // Finally nuke the database itself
+  try { await db.delete() } catch (e) { console.error('db.delete() failed', e) }
+  // Force a clean reload so the new app instance opens a fresh DB
+  window.location.replace(window.location.origin + '/')
+}
+
 export async function exportMonthCSV(year, month) {
   const start = new Date(year, month, 1).toISOString()
   const end = new Date(year, month + 1, 0, 23, 59, 59).toISOString()
