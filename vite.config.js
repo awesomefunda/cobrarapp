@@ -22,7 +22,13 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Exclude HTML from precache — let the network always serve fresh HTML.
+        // JS/CSS/image assets are content-hashed by Vite so they can be cached long-term.
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+        // Immediately activate the new service worker and take control of all clients,
+        // so users see the latest version as soon as the SW updates (no stale tab needed).
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

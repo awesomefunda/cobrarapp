@@ -229,7 +229,7 @@ export default function ClientForm({ client, mode, onSave, onDelete, onClose, t,
                   {chip(t.lastDay, form.recurrenceConfig.dayOfMonth === 'last',
                     () => { setConfig('dayOfMonth', 'last'); setCustomDay('') }, 'last')}
                   {chip(t.customDay, isCustomMonthly,
-                    () => { setConfig('dayOfMonth', parseInt(customDay) || 1) }, 'custom')}
+                    () => { const d = parseInt(customDay) || 28; setCustomDay(String(d)); setConfig('dayOfMonth', d) }, 'custom')}
                 </div>
                 {/* Custom day input */}
                 {(isCustomMonthly || customDay !== '') && (
