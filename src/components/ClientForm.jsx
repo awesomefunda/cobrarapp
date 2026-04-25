@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import { es as esLocale, enUS } from 'date-fns/locale'
@@ -152,17 +152,58 @@ export default function ClientForm({ client, mode, onSave, onDelete, onClose, t,
   // working?" with no feedback.
   const canSave = !!form.name.trim()
 
+  // ── iOS keyboard handling ────────────────────────────────────────────────
+  // On iOS Safari, when the soft keyboard opens, the layout viewport (what
+  // `vh`/`dvh` measure) does NOT shrink — only the visual viewport does. So a
+  // modal docked to `inset-0 items-end` sits BEHIND the keyboard and the Save
+  // button at the bottom is unreachable. Fix: track visualViewport and resize
+  // the overlay to match the visible area, so the modal always lives above
+  // the keyboard.
+  const overlayRef = useRef(null)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => {
+      const el = overlayRef.current
+      if (!el) return
+      el.style.top = `${vv.offsetTop}px`
+      el.style.height = `${vv.height}px`
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [])
+
+  // When an input is focused, scroll it into view so it isn't hidden behind
+  // the keyboard on iOS. `block: 'nearest'` avoids janky jumps when the input
+  // is already visible.
+  const handleFocusIn = (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      setTimeout(() => {
+        e.target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      }, 100)
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.7)' }}>
+    <div ref={overlayRef} onFocus={handleFocusIn}
+      className="fixed inset-x-0 top-0 z-50 flex items-end"
+      style={{ background: 'rgba(0,0,0,0.7)', height: '100dvh' }}>
       {/* The modal is split into three regions so the Save button is ALWAYS
           visible regardless of keyboard or scroll position:
             1. fixed header (title + close)
             2. scrollable middle (all form fields)
             3. sticky footer (Save + Delete)
-          We use 92dvh (dynamic viewport height) instead of 92vh so the modal
-          shrinks correctly when the on-screen keyboard appears on mobile. */}
+          maxHeight: 100% means the modal can fill the overlay, which is in
+          turn sized to the visualViewport (see overlayRef effect above).
+          That keeps the modal — and therefore the Save button — entirely
+          above the iOS keyboard. */}
       <div className="w-full max-w-[430px] mx-auto rounded-t-3xl slide-up flex flex-col"
-        style={{ background: 'var(--surface-1)', maxHeight: '92dvh' }}>
+        style={{ background: 'var(--surface-1)', maxHeight: '100%' }}>
 
         {/* Header — does not scroll */}
         <div className="flex justify-between items-center px-6 pt-6 pb-4 flex-shrink-0">
@@ -327,9 +368,15 @@ export default function ClientForm({ client, mode, onSave, onDelete, onClose, t,
         </div>
 
         {/* Sticky footer — always visible, never hidden behind the keyboard.
-            Holds Save (always shown) and Delete (edit mode only). */}
-        <div className="px-6 pt-3 pb-8 flex-shrink-0"
-          style={{ background: 'var(--surface-1)', borderTop: '1px solid var(--surface-3)' }}>
+            Holds Save (always shown) and Delete (edit mode only).
+            paddingBottom uses safe-area-inset so the Save button clears the
+            iPhone home indicator when running as a PWA. */}
+        <div className="px-6 pt-3 flex-shrink-0"
+          style={{
+            background: 'var(--surface-1)',
+            borderTop: '1px solid var(--surface-3)',
+            paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
+          }}>
           <button
             onClick={handleSave}
             disabled={!canSave}
