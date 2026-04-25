@@ -146,13 +146,26 @@ export default function ClientForm({ client, mode, onSave, onDelete, onClose, t,
     </p>
   )
 
+  // Save is invalid when name is missing. We expose this so we can render
+  // the button in a disabled-looking state instead of silently doing nothing
+  // on click — the previous behavior left users wondering "why isn't Save
+  // working?" with no feedback.
+  const canSave = !!form.name.trim()
+
   return (
     <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.7)' }}>
-      <div className="w-full max-w-[430px] mx-auto rounded-t-3xl p-6 pb-10 slide-up overflow-y-auto"
-        style={{ background: 'var(--surface-1)', maxHeight: '92vh' }}>
+      {/* The modal is split into three regions so the Save button is ALWAYS
+          visible regardless of keyboard or scroll position:
+            1. fixed header (title + close)
+            2. scrollable middle (all form fields)
+            3. sticky footer (Save + Delete)
+          We use 92dvh (dynamic viewport height) instead of 92vh so the modal
+          shrinks correctly when the on-screen keyboard appears on mobile. */}
+      <div className="w-full max-w-[430px] mx-auto rounded-t-3xl slide-up flex flex-col"
+        style={{ background: 'var(--surface-1)', maxHeight: '92dvh' }}>
 
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+        {/* Header — does not scroll */}
+        <div className="flex justify-between items-center px-6 pt-6 pb-4 flex-shrink-0">
           <h2 className="text-lg font-body font-medium" style={{ color: 'var(--text-primary)' }}>
             {isEdit ? t.editClient : t.newClient}
           </h2>
@@ -162,7 +175,9 @@ export default function ClientForm({ client, mode, onSave, onDelete, onClose, t,
           </button>
         </div>
 
-        <div className="space-y-5">
+        {/* Scrollable form body — flex-1 means it absorbs available space and
+            scrolls internally if content overflows. */}
+        <div className="space-y-5 px-6 overflow-y-auto flex-1 pb-4">
 
           {/* Type toggle */}
           <div className="flex gap-2 p-1 rounded-xl" style={{ background: 'var(--surface-3)' }}>
@@ -309,17 +324,34 @@ export default function ClientForm({ client, mode, onSave, onDelete, onClose, t,
             )}
           </div>
 
-          {/* Save */}
-          <button onClick={handleSave}
-            className="w-full py-4 rounded-2xl font-body font-medium"
-            style={{ background: 'var(--lime)', color: '#111' }}>
+        </div>
+
+        {/* Sticky footer — always visible, never hidden behind the keyboard.
+            Holds Save (always shown) and Delete (edit mode only). */}
+        <div className="px-6 pt-3 pb-8 flex-shrink-0"
+          style={{ background: 'var(--surface-1)', borderTop: '1px solid var(--surface-3)' }}>
+          <button
+            onClick={handleSave}
+            disabled={!canSave}
+            aria-disabled={!canSave}
+            className="w-full py-4 rounded-2xl font-body font-medium transition-opacity"
+            style={{
+              background: 'var(--lime)',
+              color: '#111',
+              opacity: canSave ? 1 : 0.4,
+              cursor: canSave ? 'pointer' : 'not-allowed',
+            }}>
             {t.save}
           </button>
-
-          {/* Delete (edit mode only) */}
+          {/* Inline hint when the user can't save yet — no more silent failures */}
+          {!canSave && (
+            <p className="text-center text-xs font-body mt-2" style={{ color: 'var(--text-muted)' }}>
+              {lang === 'es' ? 'Agrega un nombre para guardar' : 'Add a name to save'}
+            </p>
+          )}
           {isEdit && (
             <button onClick={() => onDelete(client.id)}
-              className="w-full py-3 rounded-2xl font-body text-sm"
+              className="w-full py-3 mt-2 rounded-2xl font-body text-sm"
               style={{ color: 'var(--red)', background: 'rgba(255,92,92,0.08)' }}>
               {t.delete}
             </button>
